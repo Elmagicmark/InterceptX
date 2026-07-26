@@ -2,7 +2,7 @@ workflows:
   interceptx-debug:
     name: InterceptX Debug Build
     max_build_duration: 60
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     environment:
       vars:
         PACKAGE_NAME: "com.interceptx"
@@ -28,7 +28,7 @@ workflows:
   interceptx-release:
     name: InterceptX Signed Release
     max_build_duration: 60
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     environment:
       android_signing:
         - interceptx_keystore   # reference name you set when uploading the keystore in Codemagic
@@ -55,3 +55,10 @@ workflows:
         notify:
           success: true
           failure: true
+      # Uncomment once a Google Play service account is configured — InterceptX is
+      # an internal/personal security-testing tool, so `internal` track + draft is
+      # the sane default rather than public production.
+      # google_play:
+      #   credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+      #   track: internal
+      #   submit_as_draft: true
