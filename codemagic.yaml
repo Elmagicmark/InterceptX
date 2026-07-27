@@ -2,17 +2,18 @@ workflows:
   interceptx-debug:
     name: InterceptX Debug Build
     max_build_duration: 60
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     environment:
-      android_signing: []
       vars:
         PACKAGE_NAME: "com.interceptx"
-      groups: []
       java: 17
     scripts:
       - name: Set Android SDK location
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      - name: Ensure gradlew is executable
+        script: |
+          chmod +x ./gradlew
       - name: Build debug APK
         script: |
           ./gradlew assembleDebug
@@ -30,7 +31,7 @@ workflows:
   interceptx-release:
     name: InterceptX Signed Release
     max_build_duration: 60
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     environment:
       android_signing:
         - interceptx_keystore   # reference name you set when uploading the keystore in Codemagic
@@ -43,6 +44,9 @@ workflows:
       - name: Set Android SDK location
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      - name: Ensure gradlew is executable
+        script: |
+          chmod +x ./gradlew
       - name: Build signed release
         script: |
           ./gradlew bundleRelease
