@@ -29,7 +29,16 @@ import javax.net.ssl.SSLContext
  */
 class CertificateAuthority(private val context: Context) {
 
-    private val provider = BouncyCastleProvider().also { Security.addProvider(it) }
+    private val provider = BouncyCastleProvider().also {
+        // Android may already have a limited provider registered under the name
+        // "BC" (or none at all, depending on OS version). Security.addProvider()
+        // silently no-ops if a provider with that name already exists, which
+        // would leave us using Android's stripped-down implementation instead
+        // of the full BouncyCastle we depend on for BKS keystores and custom
+        // extensions. Forcibly remove any existing "BC" and install ours first.
+        Security.removeProvider("BC")
+        Security.insertProviderAt(it, 1)
+    }
     private val keyStoreFile = File(context.filesDir, "interceptx_ca.jks")
     private val storePassword = "interceptx".toCharArray()
     private val leafCache = ConcurrentHashMap<String, Pair<PrivateKey, X509Certificate>>()
