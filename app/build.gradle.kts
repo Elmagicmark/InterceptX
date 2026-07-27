@@ -54,6 +54,15 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // The three BouncyCastle jars (bcprov/bcutil/bcpkix) each ship an
+            // identical OSGI manifest under META-INF/versions/9/, which collides
+            // during merge. None of it is needed at runtime, so drop it wholesale.
+            excludes += "/META-INF/versions/9/OSGI-INF/**"
+            excludes += "/META-INF/versions/9/module-info.class"
+            excludes += "/META-INF/*.RSA"
+            excludes += "/META-INF/*.SF"
+            excludes += "/META-INF/*.DSA"
+            excludes += "/META-INF/INDEX.LIST"
         }
     }
 }
