@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 class CertificatesViewModel(private val ca: CertificateAuthority) : ViewModel() {
     val fingerprintSha256: String get() = ca.rootFingerprintSha256()
     fun exportPem(): String = ca.exportRootCertPem()
+    fun certificateBytes(): ByteArray = ca.rootCertificate().encoded
 }
 
 class ProjectsViewModel(private val repository: InterceptXRepository) : ViewModel() {
