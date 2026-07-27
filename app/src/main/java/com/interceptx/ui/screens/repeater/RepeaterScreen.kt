@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -124,7 +125,7 @@ private fun RepeaterTabEditor(
                     Text("Save")
                 }
                 IconButton(onClick = { onDelete(tab) }) {
-                    Icon(androidx.compose.material.icons.Icons.Filled.Delete, contentDescription = "Delete tab", tint = WarningCrimson)
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete tab", tint = WarningCrimson)
                 }
             }
         }

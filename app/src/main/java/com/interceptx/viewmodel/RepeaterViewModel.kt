@@ -91,7 +91,11 @@ class RepeaterViewModel(private val repository: InterceptXRepository) : ViewMode
         conn.readTimeout = 15_000
 
         val headerMap = runCatching { JSONObject(tab.headers) }.getOrDefault(JSONObject())
-        headerMap.keys().forEach { key -> conn.setRequestProperty(key, headerMap.getString(key)) }
+        val headerKeys = headerMap.keys()
+        while (headerKeys.hasNext()) {
+            val key = headerKeys.next() as String
+            conn.setRequestProperty(key, headerMap.getString(key))
+        }
 
         if (tab.method in listOf("POST", "PUT", "PATCH") && tab.body.isNotEmpty()) {
             conn.doOutput = true

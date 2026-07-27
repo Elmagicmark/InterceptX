@@ -1,6 +1,7 @@
 package com.interceptx.ui.screens.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -144,6 +145,6 @@ private fun formatBytes(bytes: Long): String = when {
     else -> "$bytes B"
 }
 
-// Small helper to make GlowCard clickable without importing clickable everywhere above.
+// Small helper to make GlowCard clickable.
 private fun Modifier.clickableAction(onClick: () -> Unit): Modifier =
-    this.then(androidx.compose.foundation.clickable(onClick = onClick))
+    this.clickable(onClick = onClick)

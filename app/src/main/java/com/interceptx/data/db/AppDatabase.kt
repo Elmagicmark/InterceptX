@@ -20,7 +20,7 @@ import com.interceptx.data.model.ScopeRule
         ProxySettings::class
     ],
     version = 1,
-    exportSchema = true
+    exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

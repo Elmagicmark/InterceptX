@@ -73,7 +73,7 @@ fun InterceptScreen(viewModel: InterceptViewModel) {
                             Button(onClick = { selected = tx }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = VoidBlack)) {
                                 Text("Inspect / Edit")
                             }
-                            Button(onClick = { viewModel.forward(tx, JSONObject(tx.requestHeaders).toMap(), tx.requestBody) },
+                            Button(onClick = { viewModel.forward(tx, JSONObject(tx.requestHeaders).toStringMap(), tx.requestBody) },
                                 colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = VoidBlack)) {
                                 Text("Forward")
                             }
@@ -121,7 +121,7 @@ private fun RequestEditorPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
-                    val headerMap = runCatching { JSONObject(headersText).toMap() }.getOrDefault(emptyMap())
+                    val headerMap = runCatching { JSONObject(headersText).toStringMap() }.getOrDefault(emptyMap())
                     onForward(headerMap, body.ifBlank { null })
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = VoidBlack)
@@ -134,8 +134,12 @@ private fun RequestEditorPanel(
     }
 }
 
-private fun JSONObject.toMap(): Map<String, String> {
+private fun JSONObject.toStringMap(): Map<String, String> {
     val map = mutableMapOf<String, String>()
-    keys().forEach { map[it] = optString(it) }
+    val iterator = keys()
+    while (iterator.hasNext()) {
+        val key = iterator.next() as String
+        map[key] = optString(key)
+    }
     return map
 }
