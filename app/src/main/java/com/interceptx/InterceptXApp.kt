@@ -34,7 +34,15 @@ class InterceptXApp : Application() {
         super.onCreate()
         database = AppDatabase.getInstance(this)
         repository = InterceptXRepository(database)
-        certificateAuthority = CertificateAuthority(this).apply { init() }
+        certificateAuthority = CertificateAuthority(this)
+        try {
+            certificateAuthority.init()
+        } catch (e: Exception) {
+            // TLS interception (HTTPS decrypt) needs a working CA, but the rest of
+            // the app — Dashboard, History, Repeater, plain HTTP intercept — does
+            // not. Log and continue instead of taking down the whole process.
+            android.util.Log.e("InterceptXApp", "CertificateAuthority init failed; HTTPS interception will be unavailable", e)
+        }
         interceptQueue = InterceptQueue()
         proxyEngine = ProxyEngine(repository, certificateAuthority, interceptQueue, appScope)
     }
