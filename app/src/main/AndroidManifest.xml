@@ -32,5 +32,17 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
+        <!-- Lets the exported root CA file be shared/installed via content:// URIs
+             instead of a raw file:// path, which modern Android requires. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 </manifest>
