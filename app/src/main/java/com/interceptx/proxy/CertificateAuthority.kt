@@ -146,4 +146,17 @@ class CertificateAuthority(private val context: Context) {
         val encoded = encoder.encodeToString(caCert.encoded)
         return "-----BEGIN CERTIFICATE-----\n$encoded\n-----END CERTIFICATE-----\n"
     }
+
+    /**
+     * Writes the root CA as a DER-encoded .crt file in the app cache dir, ready to be
+     * handed to Android's system certificate installer (or shared to a browser/file
+     * manager) via a FileProvider URI. DER is used — rather than PEM — because
+     * Android's built-in "Install certificate" flow recognizes it more reliably
+     * across OEM skins.
+     */
+    fun exportRootCertFile(context: Context): File {
+        val file = File(context.cacheDir, "interceptx_ca.crt")
+        file.writeBytes(caCert.encoded)
+        return file
+    }
 }
