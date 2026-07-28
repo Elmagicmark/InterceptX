@@ -7,6 +7,7 @@ import com.interceptx.data.repository.InterceptXRepository
 import com.interceptx.proxy.InterceptDecision
 import com.interceptx.proxy.InterceptQueue
 import com.interceptx.proxy.PendingRequest
+import com.interceptx.proxy.ProxyEngine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -14,7 +15,8 @@ import kotlinx.coroutines.launch
 
 class InterceptViewModel(
     private val repository: InterceptXRepository,
-    private val interceptQueue: InterceptQueue
+    private val interceptQueue: InterceptQueue,
+    private val proxyEngine: ProxyEngine
 ) : ViewModel() {
 
     private val projectId = 1L
@@ -23,11 +25,11 @@ class InterceptViewModel(
         repository.observeIntercepted(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    var interceptOn = false
-        private set
+    /** Reflects the engine's real state — flipping this switch actually pauses traffic. */
+    val interceptOn: StateFlow<Boolean> = proxyEngine.interceptEnabledState
 
     fun setInterceptOn(enabled: Boolean) {
-        interceptOn = enabled
+        proxyEngine.interceptEnabled = enabled
         if (!enabled) interceptQueue.resetForwardAll()
     }
 
