@@ -19,7 +19,7 @@ import org.json.JSONObject
 @Composable
 fun InterceptScreen(viewModel: InterceptViewModel) {
     val queue by viewModel.interceptedQueue.collectAsState()
-    var interceptOn by remember { mutableStateOf(viewModel.interceptOn) }
+    val interceptOn by viewModel.interceptOn.collectAsState()
     var selected by remember { mutableStateOf<HttpTransaction?>(null) }
 
     Column(Modifier.fillMaxSize().background(VoidBlack).padding(16.dp)) {
@@ -32,10 +32,7 @@ fun InterceptScreen(viewModel: InterceptViewModel) {
                 Text(if (interceptOn) "ON" else "OFF", color = if (interceptOn) NeonGreen else TextSecondary)
                 Switch(
                     checked = interceptOn,
-                    onCheckedChange = {
-                        interceptOn = it
-                        viewModel.setInterceptOn(it)
-                    },
+                    onCheckedChange = { viewModel.setInterceptOn(it) },
                     colors = SwitchDefaults.colors(checkedTrackColor = NeonGreenDim, checkedThumbColor = NeonGreen)
                 )
             }
