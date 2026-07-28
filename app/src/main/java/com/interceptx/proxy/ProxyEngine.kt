@@ -32,36 +32,58 @@ class ProxyEngine(
     private val scope: CoroutineScope
 ) {
     private var serverSocket: ServerSocket? = null
-    @Volatile var isRunning = false
-        private set
+
+    private val _isRunningState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** Single source of truth for "is the proxy actually listening" — the UI observes this directly. */
+    val isRunningState: kotlinx.coroutines.flow.StateFlow<Boolean> = _isRunningState
+    val isRunning: Boolean get() = _isRunningState.value
+
+    private val _lastError = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val lastError: kotlinx.coroutines.flow.StateFlow<String?> = _lastError
 
     var interceptEnabled = false
     var projectId: Long = 1
     private var nextTransactionId = 1L
 
     fun start(port: Int) {
-        if (isRunning) return
-        isRunning = true
+        if (_isRunningState.value) return
+        // Flip synchronously (not inside the coroutine) so a fast double-tap of
+        // Start can't race past this guard and open a second listener on the
+        // same port before the first one has finished binding.
+        _isRunningState.value = true
+        _lastError.value = null
         scope.launch(Dispatchers.IO) {
             try {
                 val server = ServerSocket()
                 server.reuseAddress = true
-                server.bind(InetSocketAddress("127.0.0.1", port))
+                // Bind on all interfaces, not just loopback (127.0.0.1). Loopback-only
+                // would silently refuse every connection from another device on the
+                // LAN — e.g. a desktop browser using FoxyProxy pointed at this phone's
+                // IP — which looks exactly like "the proxy isn't working".
+                server.bind(InetSocketAddress("0.0.0.0", port))
                 serverSocket = server
-                while (isRunning) {
-                    val client = server.accept()
+                while (_isRunningState.value) {
+                    val client = try {
+                        server.accept()
+                    } catch (e: IOException) {
+                        break // socket closed via stop() — normal shutdown, not an error
+                    }
                     launch(Dispatchers.IO) { handleClient(client) }
                 }
             } catch (e: IOException) {
-                // Socket closed on stop() — expected.
+                // Most common cause: the port is already bound (e.g. a previous
+                // instance didn't release it yet, or something else is using it).
+                _lastError.value = "Could not start proxy on port $port: ${e.message}"
             } finally {
-                isRunning = false
+                _isRunningState.value = false
+                runCatching { serverSocket?.close() }
+                serverSocket = null
             }
         }
     }
 
     fun stop() {
-        isRunning = false
+        _isRunningState.value = false
         runCatching { serverSocket?.close() }
         serverSocket = null
     }
@@ -79,6 +101,7 @@ class ProxyEngine(
             }
         } catch (e: Exception) {
             // Best-effort proxy; log and drop the connection rather than crash the engine.
+            android.util.Log.w("ProxyEngine", "Dropped connection: ${e.javaClass.simpleName}: ${e.message}")
         } finally {
             runCatching { client.close() }
         }
@@ -131,6 +154,7 @@ class ProxyEngine(
             client, host, client.port, true
         ) as SSLSocket
         clientTls.useClientMode = false
+        forceHttp11(clientTls)
         clientTls.startHandshake()
 
         val tlsInput = BufferedInputStream(clientTls.getInputStream())
@@ -149,6 +173,12 @@ class ProxyEngine(
 
         val start = System.currentTimeMillis()
         val upstreamSocket = javax.net.ssl.SSLSocketFactory.getDefault().createSocket(host, 443) as SSLSocket
+        // Most real sites offer HTTP/2 over TLS (via ALPN) by default. Our proxy
+        // only understands plain-text HTTP/1.1 framing, so without pinning ALPN
+        // here an h2 response comes back as binary that we can't parse — the
+        // request silently fails and nothing shows up in History/Dashboard.
+        forceHttp11(upstreamSocket)
+        upstreamSocket.startHandshake()
         upstreamSocket.getOutputStream().apply {
             write(buildRawRequest(outMethod, outUrl, outHeaders, outBody))
             flush()
@@ -158,6 +188,16 @@ class ProxyEngine(
         upstreamSocket.close()
 
         recordTransaction(outMethod, "https://$host$outUrl", host, "https", outHeaders, outBody, responseBytes, start)
+    }
+
+    /** Pins ALPN to HTTP/1.1 only (API 29+; a no-op on older devices where the
+     *  platform generally doesn't offer h2 negotiation via this API anyway). */
+    private fun forceHttp11(socket: SSLSocket) {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val params = socket.sslParameters
+            params.applicationProtocols = arrayOf("http/1.1")
+            socket.sslParameters = params
+        }
     }
 
     private fun maybeIntercept(
