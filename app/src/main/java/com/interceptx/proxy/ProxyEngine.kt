@@ -41,7 +41,14 @@ class ProxyEngine(
     private val _lastError = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val lastError: kotlinx.coroutines.flow.StateFlow<String?> = _lastError
 
-    var interceptEnabled = false
+    private val _interceptEnabled = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** Single source of truth for "is intercept mode on" — both the Intercept
+     *  screen's switch and the Settings screen read/write through this, so
+     *  neither can silently fall out of sync with what the engine actually does. */
+    val interceptEnabledState: kotlinx.coroutines.flow.StateFlow<Boolean> = _interceptEnabled
+    var interceptEnabled: Boolean
+        get() = _interceptEnabled.value
+        set(value) { _interceptEnabled.value = value }
     var projectId: Long = 1
     private var nextTransactionId = 1L
 
