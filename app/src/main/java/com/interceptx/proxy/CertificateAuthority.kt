@@ -1,6 +1,8 @@
 package com.interceptx.proxy
 
 import android.content.Context
+import org.bouncycastle.asn1.DERIA5String
+import org.bouncycastle.asn1.misc.MiscObjectIdentifiers
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.asn1.x509.*
 import org.bouncycastle.cert.X509v3CertificateBuilder
@@ -20,12 +22,16 @@ import javax.net.ssl.SSLContext
 
 /**
  * Manages the InterceptX root CA used to sign per-host leaf certificates on the fly,
- * enabling TLS decryption (MITM) the same way Burp/mitmproxy/HTTP Toolkit do.
+ * enabling TLS decryption (MITM) the same way Burp/mitmproxy/Reqable do.
  *
  * The user must install the exported root CA as a trusted certificate on the
  * device (see Certificates screen) for target apps to trust intercepted HTTPS
  * traffic. InterceptX never ships a pre-trusted CA — one is generated locally
  * per install so no two installs share a private key.
+ *
+ * Certificate shape (extensions, key identifiers, EKU) mirrors what mature MITM
+ * tools like Reqable/Charles/mitmproxy generate, for maximum acceptance by
+ * modern OS/browser certificate validators.
  */
 class CertificateAuthority(private val context: Context) {
 
@@ -40,15 +46,27 @@ class CertificateAuthority(private val context: Context) {
         Security.insertProviderAt(it, 1)
     }
     private val keyStoreFile = File(context.filesDir, "interceptx_ca.jks")
+    private val versionFile = File(context.filesDir, "interceptx_ca_version.txt")
     private val storePassword = "interceptx".toCharArray()
     private val leafCache = ConcurrentHashMap<String, Pair<PrivateKey, X509Certificate>>()
+    private val extUtils = JcaX509ExtensionUtils()
 
     private lateinit var caKeyPair: KeyPair
     private lateinit var caCert: X509Certificate
 
+    companion object {
+        // Bump this whenever generateRootCa()/generateLeaf() extensions change —
+        // it forces a fresh CA (and fresh leaf cache) instead of silently reusing
+        // an old certificate that was generated before the change.
+        private const val CA_SCHEMA_VERSION = 2
+    }
+
     fun init() {
         val ks = KeyStore.getInstance("BKS", "BC")
-        if (keyStoreFile.exists()) {
+        val storedVersion = if (versionFile.exists()) versionFile.readText().trim().toIntOrNull() else null
+        val needsRegeneration = storedVersion != CA_SCHEMA_VERSION
+
+        if (keyStoreFile.exists() && !needsRegeneration) {
             keyStoreFile.inputStream().use { ks.load(it, storePassword) }
             caKeyPair = KeyPair(
                 ks.getCertificate("ca").publicKey,
@@ -60,6 +78,7 @@ class CertificateAuthority(private val context: Context) {
             ks.load(null, null)
             ks.setKeyEntry("ca", caKeyPair.private, storePassword, arrayOf<Certificate>(caCert))
             keyStoreFile.outputStream().use { ks.store(it, storePassword) }
+            versionFile.writeText(CA_SCHEMA_VERSION.toString())
         }
     }
 
@@ -78,10 +97,23 @@ class CertificateAuthority(private val context: Context) {
             org.bouncycastle.asn1.x509.SubjectPublicKeyInfo.getInstance(caKeyPair.public.encoded)
         )
         builder.addExtension(Extension.basicConstraints, true, BasicConstraints(true))
+        builder.addExtension(Extension.keyUsage, true, KeyUsage(KeyUsage.keyCertSign or KeyUsage.cRLSign))
+        // Key identifiers let validators build/verify the chain reliably instead of
+        // matching on subject name alone — every mature MITM tool (Reqable, Charles,
+        // mitmproxy) includes these on its root.
+        builder.addExtension(Extension.subjectKeyIdentifier, false, extUtils.createSubjectKeyIdentifier(caKeyPair.public))
+        builder.addExtension(Extension.authorityKeyIdentifier, false, extUtils.createAuthorityKeyIdentifier(caKeyPair.public))
+        // Purely informational — shows up if someone inspects the chain, same idea
+        // as Reqable's own root comment.
         builder.addExtension(
-            Extension.keyUsage, true,
-            KeyUsage(KeyUsage.keyCertSign or KeyUsage.cRLSign)
+            MiscObjectIdentifiers.netscapeCertComment, false,
+            DERIA5String(
+                "This root certificate was generated locally by InterceptX for HTTPS " +
+                    "interception during security testing. If you see this certificate in a " +
+                    "chain, traffic to this host is being decrypted by InterceptX on this device."
+            )
         )
+
         val signer = JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").build(caKeyPair.private)
         caCert = JcaX509CertificateConverter().setProvider("BC").getCertificate(builder.build(signer))
     }
@@ -111,6 +143,16 @@ class CertificateAuthority(private val context: Context) {
             Extension.keyUsage, true,
             KeyUsage(KeyUsage.digitalSignature or KeyUsage.keyEncipherment)
         )
+        // Modern Chromium/Android validators expect a TLS server leaf to explicitly
+        // declare serverAuth EKU — without it some validators reject or warn even
+        // though the chain otherwise checks out.
+        builder.addExtension(
+            Extension.extendedKeyUsage, false,
+            ExtendedKeyUsage(KeyPurposeId.id_kp_serverAuth)
+        )
+        // Chain-building identifiers, matching the root's.
+        builder.addExtension(Extension.subjectKeyIdentifier, false, extUtils.createSubjectKeyIdentifier(leafKeyPair.public))
+        builder.addExtension(Extension.authorityKeyIdentifier, false, extUtils.createAuthorityKeyIdentifier(caKeyPair.public))
 
         val signer = JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").build(caKeyPair.private)
         val leafCert = JcaX509CertificateConverter().setProvider("BC").getCertificate(builder.build(signer))
